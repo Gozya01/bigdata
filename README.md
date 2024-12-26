@@ -3,3 +3,4 @@
 - kibana的webui在localhost:5601
 - UserBehavior.csv没有上传;
 - UserBehavior1.csv为示例;
+- 修改flink-sql.sql文件可以自定义计算逻辑;

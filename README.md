@@ -1,1 +1,5 @@
-init
+- 运行```docker-compose up -d```命令即可启动容器,```docker-compose down```停止容器;
+- 其中flink的webui在localhost:8081
+- kibana的webui在localhost:5601
+- UserBehavior.csv没有上传;
+- UserBehavior1.csv为示例;

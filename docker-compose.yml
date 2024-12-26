@@ -1,0 +1,215 @@
+services:
+  # Zookeeper nodes
+  zookeeper1:
+    image: confluentinc/cp-zookeeper:7.7.1
+    container_name: zookeeper1
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - kafka-flink-network
+
+  zookeeper2:
+    image: confluentinc/cp-zookeeper:7.7.1
+    container_name: zookeeper2
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2182
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - kafka-flink-network
+
+  zookeeper3:
+    image: confluentinc/cp-zookeeper:7.7.1
+    container_name: zookeeper3
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2183
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - kafka-flink-network
+
+  # Kafka Brokers
+  kafka1:
+    image: confluentinc/cp-kafka:7.7.1
+    container_name: kafka1
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper1:2181,zookeeper2:2182,zookeeper3:2183
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 2
+    depends_on:
+      - zookeeper1 
+      - zookeeper2 
+      - zookeeper3
+    networks:
+      - kafka-flink-network
+
+  kafka2:
+    image: confluentinc/cp-kafka:7.7.1
+    container_name: kafka2
+    ports:
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper1:2181,zookeeper2:2182,zookeeper3:2183
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 2
+    depends_on:
+      - zookeeper1 
+      - zookeeper2 
+      - zookeeper3
+    networks:
+      - kafka-flink-network
+
+  kafka3:
+    image: confluentinc/cp-kafka:7.7.1
+    container_name: kafka3
+    ports:
+      - "9094:9094"
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper1:2181,zookeeper2:2182,zookeeper3:2183
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3:9094
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9094
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 2
+    depends_on:
+      - zookeeper1 
+      - zookeeper2 
+      - zookeeper3
+    networks:
+      - kafka-flink-network
+
+  # Flink JobManager
+  flink-jobmanager:
+    image: flink:1.16.3-scala_2.12
+    container_name: flink-jobmanager
+    ports:
+      - "8081:8081"      
+    command: >
+     bash -c "bash /docker-entrypoint-initdb.d/flink-lib-init.sh && /opt/flink/bin/jobmanager.sh start && sleep 20 && /opt/flink/bin/sql-client.sh embedded -l lib -f ./flink-sql.sql && tail -f /dev/null"
+    environment:
+      FLINK_PROPERTIES: |
+        taskmanager.numberOfTaskSlots: 20
+        jobmanager.rpc.address: flink-jobmanager
+        restart-strategy: fixed-delay
+        restart-strategy.fixed-delay.attempts: 5
+        restart-strategy.fixed-delay.delay: 20 s
+        web.ui.i18n: "zh-CN"  # 设置 Flink Web UI 语言为中文
+    networks:
+      - kafka-flink-network
+    volumes:
+      - ./jar:/tmp/jar
+      - ./flink-lib-init.sh:/docker-entrypoint-initdb.d
+      - ./flink-sql.sql:/opt/flink/flink-sql.sql
+
+  # Flink TaskManager nodes
+  flink-taskmanager1:
+    image: flink:1.16.3-scala_2.12
+    container_name: flink-taskmanager1
+    command: >
+      bash -c "bash /docker-entrypoint-initdb.d/flink-lib-init.sh && /opt/flink/bin/taskmanager.sh start-foreground"
+    environment:
+      FLINK_PROPERTIES: |
+        taskmanager.numberOfTaskSlots: 10
+        jobmanager.rpc.address: flink-jobmanager
+        restart-strategy: fixed-delay
+        restart-strategy.fixed-delay.attempts: 5
+        restart-strategy.fixed-delay.delay: 20 s
+        web.ui.i18n: "zh-CN"  # 设置 Flink Web UI 语言为中文
+    depends_on:
+      - flink-jobmanager
+    networks:
+      - kafka-flink-network
+    volumes:
+      - ./jar:/tmp/jar
+      - ./flink-lib-init.sh:/docker-entrypoint-initdb.d
+
+  flink-taskmanager2:
+    image: flink:1.16.3-scala_2.12
+    container_name: flink-taskmanager2
+    command: >
+      bash -c "bash /docker-entrypoint-initdb.d/flink-lib-init.sh && /opt/flink/bin/taskmanager.sh start-foreground"
+    environment:
+      FLINK_PROPERTIES: |
+        taskmanager.numberOfTaskSlots: 10
+        jobmanager.rpc.address: flink-jobmanager
+        restart-strategy: fixed-delay
+        restart-strategy.fixed-delay.attempts: 5
+        restart-strategy.fixed-delay.delay: 20 s
+        web.ui.i18n: "zh-CN"  # 设置 Flink Web UI 语言为中文
+    depends_on:
+      - flink-jobmanager
+    networks:
+      - kafka-flink-network
+    volumes:
+      - ./jar:/tmp/jar
+      - ./flink-lib-init.sh:/docker-entrypoint-initdb.d
+
+  # MySQL container (version 5.7)
+  mysql:
+    image: mysql:8
+    container_name: mysql8
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./create.sql:/docker-entrypoint-initdb.d/create.sql  # Mount the create.sql script
+    networks:
+      - kafka-flink-network
+
+  # Elasticsearch container
+  es:
+    image: elasticsearch:7.17.25
+    container_name: es
+    environment:
+      discovery.type: single-node
+      ELASTIC_PASSWORD: 123456
+      # Disable HTTPS and security features for HTTP support
+      xpack.security.enabled: false
+    ports:
+      - "9200:9200"  # Expose HTTP on port 9200
+    networks:
+      - kafka-flink-network
+
+  # Kibana container
+  kibana:
+    image: kibana:7.17.25
+    container_name: kibana
+    environment:
+      ELASTICSEARCH_HOSTS: http://es:9200
+      xpack.fleet.enabled: false    # 禁用 Fleet 插件
+      xpack.security.enabled: false  # 禁用安全功能
+      i18n.locale: "zh-CN"  # 设置语言为中文
+    ports:
+      - "5601:5601"
+    volumes:
+      - ./kibana.yml:/usr/share/kibana/config/kibana.yml
+    depends_on:
+      - es
+    networks:
+      - kafka-flink-network
+
+  # Python container
+  python-container:
+    image: python:3.10
+    container_name: python-container
+    command: >
+      bash -c "pip3 install kafka-python && python3 /app/datagen.py"  # 安装 kafka-python 并运行 datagen.py
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./datagen.py:/app/datagen.py  # 将 datagen.py 文件挂载到容器内
+      - ./UserBehavior.csv:/app/UserBehavior.csv  # 将 UserBehavior1.csv 文件挂载到容器内
+    depends_on:
+      - kafka1
+      - kafka2 
+      - kafka3
+    networks:
+      - kafka-flink-network
+
+networks:
+  kafka-flink-network:
+    driver: bridge
